@@ -6,8 +6,8 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #FFA500; /* Orange background */
-            color: #fff;
+            background-color: #f4f4f4; /* Light gray background */
+            color: #333333; /* Dark gray text */
             text-align: center;
             padding: 50px;
             margin: 0;
@@ -15,28 +15,28 @@
         h1 {
             font-size: 3.5em;
             margin-bottom: 10px;
-            color: #CC5500; /* Deep Burnt Orange for Title */
+            color: #003366; /* Professional Deep Blue for Name */
         }
         .contact-info {
             margin-bottom: 30px;
             font-size: 1.2em;
         }
         .contact-info a {
-            color: #CC5500; /* Red-Orange for Email */
+            color: #003366; /* Professional Deep Blue for Email */
             text-decoration: underline;
         }
         .info-section {
             background-color: #ffffff;
-            color: #333;
+            color: #333333;
             padding: 20px;
             margin: 20px auto;
             width: 80%;
             max-width: 500px;
             border-radius: 8px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
         }
         h2 {
-            color: #CC5500; /* Red-Orange for Section Titles */
+            color: #003366; /* Professional Deep Blue for Section Titles */
             margin-bottom: 10px;
         }
         ul {
@@ -49,18 +49,30 @@
         li {
             margin-bottom: 8px;
         }
+        li::before {
+            content: "✔️";
+            color: #CC5500; /* Burnt Orange Checkmarks */
+            margin-right: 8px;
+        }
+        a {
+            color: #003366; /* Professional Blue for Links */
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
         .link-button {
             display: inline-block;
             padding: 10px 20px;
             margin-top: 20px;
-            background-color: #0077b5;
+            background-color: #003366; /* Deep Blue Button */
             color: #fff;
             text-decoration: none;
             border-radius: 5px;
             transition: background-color 0.3s ease;
         }
         .link-button:hover {
-            background-color: #005582;
+            background-color: #002244;
         }
     </style>
 </head>
@@ -82,9 +94,9 @@
     <div class="info-section">
         <h2>Skills</h2>
         <ul>
-            <li>✔️ Microsoft Word, Excel, PowerPoint</li>
-            <li>✔️ Programming: C, Java, HTML, CSS, JavaScript (Learning)</li>
-            <li>✔️ Languages: Fluent in English, Spanish, and Turkish</li>
+            <li>Microsoft Word, Excel, PowerPoint</li>
+            <li>Programming: C, Java, HTML, CSS, JavaScript (Learning)</li>
+            <li>Languages: Fluent in English, Spanish, and Turkish</li>
         </ul>
     </div>
 
@@ -93,9 +105,9 @@
         <p><strong>CT Consultants – Civil Engineering Intern</strong><br>
         May 2023 – August 2023</p>
         <ul>
-            <li>✔️ Assisted in infrastructure projects including roadway resurfacing and utility designs.</li>
-            <li>✔️ Reviewed and edited construction details and cost estimates.</li>
-            <li>✔️ Collaborated with senior engineers on project planning and site evaluations.</li>
+            <li>Assisted in infrastructure projects including roadway resurfacing and utility designs.</li>
+            <li>Reviewed and edited construction details and cost estimates.</li>
+            <li>Collaborated with senior engineers on project planning and site evaluations.</li>
         </ul>
     </div>
 
