@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            color: #333;
+        }
+        .game-container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-auto-rows: 1fr; /* Explicitly make rows share space equally */
+            grid-gap: 10px; /* Increased gap for better separation */
+            width: 300px; /* Fixed width for the board */
+            height: 300px; /* Fixed height for the board */
+            margin: 20px auto;
+        }
+        .cell {
+            width: 100%; /* Cells fill the grid column */
+            height: 100%; /* Cells fill the grid row */
+            background-color: #e2e8f0; /* Lighter cell background */
+            border: 2px solid #cbd5e1; /* Slightly darker border */
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem; /* Larger font for X and O */
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            color: transparent; /* Make initial content (e.g. &nbsp;) invisible */
+        }
+        .cell:hover:not(.occupied) {
+            background-color: #cbd5e1; /* Hover effect for empty cells */
+        }
+        .cell.x {
+            color: #e53e3e; /* Red for X - overrides transparent */
+        }
+        .cell.o {
+            color: #3b82f6; /* Blue for O - overrides transparent */
+        }
+        .status-message {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #1a202c; /* Darker text for status */
+            min-height: 2.25rem; /* Ensure space for message */
+        }
+        .play-again-button {
+            background-color: #4a5568; /* Dark gray-blue button */
+            color: white;
+            padding: 12px 25px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+        .play-again-button:hover {
+            background-color: #2d3748; /* Darker hover state */
+        }
+        .play-again-button.hidden {
+            display: none;
+        }
+        h1 {
+            color: #2d3748; /* Dark blue-gray for title */
+            margin-bottom: 20px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 400px) {
+            .board {
+                width: 240px;
+                height: 240px;
+            }
+            .cell {
+                font-size: 2.5rem;
+            }
+            .status-message {
+                font-size: 1.25rem;
+            }
+            .game-container {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Tic Tac Toe</h1>
+        <div id="statusMessage" class="status-message">Your turn (X)</div>
+        <div class="board" id="board">
+            </div>
+        <button id="playAgainButton" class="play-again-button hidden">Play Again?</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const boardElement = document.getElementById('board');
+            const statusMessageElement = document.getElementById('statusMessage');
+            const playAgainButton = document.getElementById('playAgainButton');
+
+            let board = ['', '', '', '', '', '', '', '', ''];
+            let currentPlayer = 'X'; // User is X
+            let gameActive = true;
+            const winningConditions = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+                [0, 4, 8], [2, 4, 6]  // Diagonals
+            ];
+
+            // Function to create the board cells
+            function createBoard() {
+                boardElement.innerHTML = ''; // Clear previous board
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.index = i;
+                    cell.innerHTML = '&nbsp;'; // Add a non-breaking space to stabilize size
+                    cell.addEventListener('click', handleCellClick);
+                    boardElement.appendChild(cell);
+                }
+            }
+
+            // Function to handle a cell click
+            function handleCellClick(event) {
+                const clickedCell = event.target;
+                const clickedCellIndex = parseInt(clickedCell.dataset.index);
+
+                // If cell is already taken (board state) or game is not active, or not player's turn
+                if (board[clickedCellIndex] !== '' || !gameActive || currentPlayer !== 'X') {
+                    return;
+                }
+
+                // Player's move
+                makeMove(clickedCell, clickedCellIndex, 'X');
+
+                // Check for win or tie
+                if (!checkGameStatus('X')) {
+                    // If game is still active, it's computer's turn
+                    if (gameActive) {
+                        currentPlayer = 'O';
+                        statusMessageElement.textContent = "Computer's turn (O)";
+                        setTimeout(computerMove, 700);
+                    }
+                }
+            }
+
+            // Function for the computer's move
+            function computerMove() {
+                if (!gameActive || currentPlayer !== 'O') return;
+
+                let availableCells = [];
+                board.forEach((cell, index) => {
+                    if (cell === '') {
+                        availableCells.push(index);
+                    }
+                });
+
+                if (availableCells.length > 0) {
+                    const randomIndex = availableCells[Math.floor(Math.random() * availableCells.length)];
+                    const cellElement = boardElement.children[randomIndex];
+                    makeMove(cellElement, randomIndex, 'O');
+                    checkGameStatus('O');
+                }
+
+                if (gameActive) {
+                    currentPlayer = 'X';
+                    statusMessageElement.textContent = "Your turn (X)";
+                }
+            }
+
+            // Function to make a move and update UI
+            function makeMove(cellElement, index, player) {
+                board[index] = player;
+                cellElement.textContent = player; // This replaces the &nbsp;
+                cellElement.classList.add(player.toLowerCase());
+                cellElement.classList.add('occupied'); 
+            }
+
+            // Function to check game status (win, tie)
+            function checkGameStatus(player) {
+                let roundWon = false;
+                for (let i = 0; i < winningConditions.length; i++) {
+                    const winCondition = winningConditions[i];
+                    let a = board[winCondition[0]];
+                    let b = board[winCondition[1]];
+                    let c = board[winCondition[2]];
+                    if (a === '' || b === '' || c === '') {
+                        continue;
+                    }
+                    if (a === b && b === c) {
+                        roundWon = true;
+                        break;
+                    }
+                }
+
+                if (roundWon) {
+                    statusMessageElement.textContent = `${player === 'X' ? 'You' : 'Computer'} won!`;
+                    gameActive = false;
+                    playAgainButton.classList.remove('hidden');
+                    return true; 
+                }
+
+                if (!board.includes('')) {
+                    statusMessageElement.textContent = 'Game is a Tie!';
+                    gameActive = false;
+                    playAgainButton.classList.remove('hidden');
+                    return true; 
+                }
+                return false; 
+            }
+
+            // Function to restart the game
+            function restartGame() {
+                board = ['', '', '', '', '', '', '', '', ''];
+                gameActive = true;
+                currentPlayer = 'X'; 
+                statusMessageElement.textContent = "Your turn (X)";
+                playAgainButton.classList.add('hidden');
+                
+                Array.from(boardElement.children).forEach(cell => {
+                    cell.innerHTML = '&nbsp;'; // Reset with non-breaking space
+                    cell.classList.remove('x', 'o', 'occupied');
+                });
+            }
+            playAgainButton.addEventListener('click', restartGame);
+            createBoard();
+        });
+    </script>
+</body>
+</html>
