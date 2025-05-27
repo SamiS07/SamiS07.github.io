@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive Spherical Floating Island with Wildlife & Orbs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* Basic styling for the page */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: 'Inter', sans-serif;
+            cursor: grab;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        body.dragging {
+            cursor: grabbing;
+        }
+        /* More Aesthetic and Smaller Settings Panel */
+        #settingsPanel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.7); /* Slightly less opaque */
+            padding: 8px; /* Adjusted padding */
+            border-radius: 5px; 
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            width: 170px; /* Adjusted width for button */
+            font-size: 11px; 
+            color: #555;
+            border: 1px solid rgba(0, 0, 0, 0.05); 
+        }
+        #settingsPanel h3 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            font-size: 13px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 2px;
+        }
+        #settingsPanel label {
+            display: block;
+            margin-top: 5px;
+            margin-bottom: 1px;
+            font-weight: normal;
+        }
+        #settingsPanel input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            background: #777;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 1px solid #555;
+        }
+        #settingsPanel input::-moz-range-thumb {
+            width: 10px;
+            height: 10px;
+            background: #777;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 1px solid #555;
+        }
+        #settingsPanel input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 3px;
+        }
+        #settingsPanel input.color-input {
+            height: 20px;
+        }
+        .setting-group {
+            margin-bottom: 6px;
+        }
+        #resetButton {
+            width: 100%;
+            padding: 5px;
+            margin-top: 8px;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            color: #333;
+        }
+        #resetButton:hover {
+            background-color: #d0d0d0;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <canvas id="islandCanvas"></canvas>
+
+    <div id="settingsPanel">
+        <h3>Lighting</h3>
+
+        <div class="setting-group">
+            <label for="sunIntensity">Sun Max Intensity:</label>
+            <input type="range" id="sunIntensity" min="0" max="3" step="0.1" value="1.8">
+            <label for="sunMiddayColor">Sun Midday Color:</label>
+            <input type="color" id="sunMiddayColor" class="color-input" value="#FFE5B4">
+        </div>
+
+        <div class="setting-group">
+            <label for="crystalLightIntensity">Crystal Light Intensity:</label>
+            <input type="range" id="crystalLightIntensity" min="0" max="5" step="0.1" value="1.5">
+            <label for="crystalLightColor">Crystal Light Color:</label>
+            <input type="color" id="crystalLightColor" class="color-input" value="#8A2BE2">
+        </div>
+
+        <div class="setting-group">
+            <label for="crystalEmissiveColor">Crystal Glow Color:</label>
+            <input type="color" id="crystalEmissiveColor" class="color-input" value="#4B0082">
+        </div>
+        <button id="resetButton">Reset Simulation</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer;
+        let islandGroup, directionalLight, ambientLight;
+        let characterPivot, characterModel, characterMesh;
+        let crystalMesh, crystalLight;
+        let time = 0;
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let baseIslandY = 0;
+
+        const keysPressed = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+        // General animation constants
+        const BOBBING_SPEED = 0.35;
+        const BOBBING_AMOUNT = 0.15;
+        const AUTO_ROTATION_SPEED = 0.0005;
+        const DRAG_ROTATION_SENSITIVITY = 0.007;
+        const ISLAND_RADIUS = 3.5;
+        const LIGHT_ORBIT_SPEED = 0.007; 
+        
+        // Character constants
+        const CHARACTER_HEIGHT = 0.8;
+        const CHARACTER_RADIUS = 0.15;
+        const CHARACTER_MOVE_SPEED = 0.02;
+        const CHARACTER_TURN_SPEED = 0.03;
+        
+        // Crystal constants
+        const CRYSTAL_SIZE = 0.7;
+        const CRYSTAL_LIGHT_DISTANCE = 0.5;
+
+        const wildlifeArray = [];
+        const NUM_BIRDS = 10; 
+
+        // Sun color constants
+        const sunriseSunColor = new THREE.Color(0xFF8C00); 
+        let baseSunColor = new THREE.Color(0xFFE5B4); 
+
+        // Zoom constants
+        const MIN_CAMERA_Z = 8;  
+        const MAX_CAMERA_Z = 35; 
+        const ZOOM_SPEED = 0.05;
+
+        // Orbiting Ball Constants
+        const NUM_ORBITING_BALLS = 14; 
+        const ORBITING_BALL_VISUAL_RADIUS = 0.5; 
+        const ORBITING_BALL_COLOR = 0xDDDDDD; 
+        const ORBITING_BALL_ORBIT_RADIUS_OFFSET = 4.0; 
+        const ORBITING_BALL_ORBIT_RADIUS_VARIATION = 1.0; 
+        const ORBITING_BALL_SPEED_MIN = 0.004;
+        const ORBITING_BALL_SPEED_VARIATION = 0.006;
+        const ORBITING_BALL_BOB_SPEED = 0.8; 
+        const ORBITING_BALL_BOB_AMOUNT = 0.1;
+
+        // Special Moon Constants
+        const SPECIAL_MOON_RADIUS = 2.1; 
+        const SPECIAL_MOON_COLOR = 0xB0B0B0; 
+        const SPECIAL_MOON_ROUGHNESS = 0.9; 
+
+
+        // Store default UI values
+        const defaultSettings = {
+            sunIntensity: 1.8,
+            sunMiddayColor: "#FFE5B4",
+            crystalLightIntensity: 1.5,
+            crystalLightColor: "#8A2BE2",
+            crystalEmissiveColor: "#4B0082"
+        };
+
+        function init() {
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x87CEEB);
+                scene.fog = new THREE.Fog(0x87CEEB, 20, 150); 
+
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 7, 18); 
+
+                const canvas = document.getElementById('islandCanvas');
+                renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+                document.getElementById('sunIntensity').value = defaultSettings.sunIntensity;
+                document.getElementById('sunMiddayColor').value = defaultSettings.sunMiddayColor;
+                document.getElementById('crystalLightIntensity').value = defaultSettings.crystalLightIntensity;
+                document.getElementById('crystalLightColor').value = defaultSettings.crystalLightColor;
+                document.getElementById('crystalEmissiveColor').value = defaultSettings.crystalEmissiveColor;
+                
+                baseSunColor.set(defaultSettings.sunMiddayColor);
+                ambientLight = new THREE.AmbientLight(0x708090, 0.8); 
+                scene.add(ambientLight);
+
+                directionalLight = new THREE.DirectionalLight(baseSunColor, defaultSettings.sunIntensity);
+                directionalLight.position.set(15, 20, 12); 
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 100; 
+                directionalLight.shadow.camera.left = -50; 
+                directionalLight.shadow.camera.right = 50;
+                directionalLight.shadow.camera.top = 50;
+                directionalLight.shadow.camera.bottom = -50;
+                scene.add(directionalLight);
+
+                islandGroup = new THREE.Group();
+                baseIslandY = 0;
+                islandGroup.position.y = baseIslandY;
+
+                const islandMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x6B8E23, roughness: 0.85, metalness: 0.1
+                });
+                const islandGeometry = new THREE.SphereGeometry(ISLAND_RADIUS, 32, 24);
+                const islandSphere = new THREE.Mesh(islandGeometry, islandMaterial);
+                islandSphere.castShadow = true;
+                islandSphere.receiveShadow = true;
+                islandGroup.add(islandSphere);
+
+                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x654321 });
+                const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x006400 });
+                const numTrees = 40; 
+                const minTreeThetaForTop = Math.PI / 7; 
+                
+                for (let i = 0; i < numTrees; i++) {
+                    const treeGroup = new THREE.Group();
+                    const trunkHeight = Math.random() * 0.8 + 0.8;
+                    const trunkRadius = Math.random() * 0.08 + 0.12;
+                    const trunkGeometry = new THREE.CylinderGeometry(trunkRadius * 0.7, trunkRadius, trunkHeight, 6);
+                    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                    trunk.castShadow = true;
+                    treeGroup.add(trunk);
+
+                    const foliageRadius = Math.random() * 0.4 + 0.5;
+                    const foliageGeometry = new THREE.IcosahedronGeometry(foliageRadius, 0);
+                    const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
+                    foliage.position.y = trunkHeight / 2 + foliageRadius * 0.6;
+                    foliage.castShadow = true;
+                    treeGroup.add(foliage);
+
+                    let phi, theta;
+                    theta = Math.random() * Math.PI; 
+                    if (theta < minTreeThetaForTop) { 
+                        theta = minTreeThetaForTop + Math.random() * (Math.PI - minTreeThetaForTop); 
+                    }
+                    phi = Math.random() * Math.PI * 2;
+
+                    const x = ISLAND_RADIUS * Math.sin(theta) * Math.cos(phi);
+                    const y = ISLAND_RADIUS * Math.cos(theta);
+                    const z = ISLAND_RADIUS * Math.sin(theta) * Math.sin(phi);
+
+                    treeGroup.position.set(x, y, z);
+                    const treeUpDirection = new THREE.Vector3(x, y, z).normalize();
+                    treeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), treeUpDirection);
+                    trunk.position.y = trunkHeight / 2;
+                    islandGroup.add(treeGroup);
+                }
+                scene.add(islandGroup);
+
+                const crystalGeometry = new THREE.OctahedronGeometry(CRYSTAL_SIZE, 0);
+                const crystalMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    emissive: defaultSettings.crystalEmissiveColor,
+                    emissiveIntensity: 1.0,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                crystalMesh = new THREE.Mesh(crystalGeometry, crystalMaterial);
+                crystalMesh.position.set(0, ISLAND_RADIUS + CRYSTAL_SIZE * 0.6, 0);
+                crystalMesh.castShadow = true;
+                islandGroup.add(crystalMesh);
+
+                crystalLight = new THREE.PointLight(defaultSettings.crystalLightColor, defaultSettings.crystalLightIntensity, 15, 2); 
+                crystalLight.position.set(0, CRYSTAL_LIGHT_DISTANCE, 0);
+                crystalLight.castShadow = true;
+                crystalLight.shadow.mapSize.width = 512;
+                crystalLight.shadow.mapSize.height = 512;
+                crystalLight.shadow.camera.near = 0.1;
+                crystalLight.shadow.camera.far = 10;
+                crystalMesh.add(crystalLight);
+
+                characterPivot = new THREE.Group();
+                islandGroup.add(characterPivot);
+                characterModel = new THREE.Group();
+                characterModel.position.set(0, ISLAND_RADIUS, 0); 
+                characterPivot.add(characterModel);
+                const characterMaterial = new THREE.MeshStandardMaterial({color: 0xff4500, roughness: 0.5});
+                const characterGeometry = new THREE.CylinderGeometry(CHARACTER_RADIUS, CHARACTER_RADIUS, CHARACTER_HEIGHT, 8);
+                characterMesh = new THREE.Mesh(characterGeometry, characterMaterial);
+                characterMesh.castShadow = true;
+                characterMesh.receiveShadow = false; 
+                characterMesh.position.y = CHARACTER_HEIGHT / 2; 
+                characterModel.add(characterMesh);
+
+                const birdBodyMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.7 });
+                const birdWingMaterial = new THREE.MeshStandardMaterial({ color: 0xbbbbbb, roughness: 0.8, side: THREE.DoubleSide });
+                for (let i = 0; i < NUM_BIRDS; i++) {
+                    const birdVisualGroup = new THREE.Group(); 
+                    const bodyRadius = 0.06; const bodyLength = 0.25;
+                    const bodyGeometry = new THREE.ConeGeometry(bodyRadius, bodyLength, 5);
+                    bodyGeometry.rotateX(Math.PI / 2); 
+                    const bodyMesh = new THREE.Mesh(bodyGeometry, birdBodyMaterial);
+                    bodyMesh.castShadow = true; birdVisualGroup.add(bodyMesh);
+                    
+                    const wingSpan = 0.45; const wingChord = 0.15; const wingThickness = 0.01;
+                    const singleWingGeometry = new THREE.BoxGeometry(wingSpan, wingThickness, wingChord);
+                    const singleWingMesh = new THREE.Mesh(singleWingGeometry, birdWingMaterial);
+                    singleWingMesh.castShadow = true; singleWingMesh.position.y = bodyRadius * 0.3; 
+                    birdVisualGroup.add(singleWingMesh);
+
+                    const bird = new THREE.Group(); 
+                    bird.add(birdVisualGroup);
+
+                    bird.userData = {
+                        orbitRadius: ISLAND_RADIUS + 2.5 + Math.random() * 1.5,
+                        orbitAxis: new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize(),
+                        orbitAngularSpeed: 0.003 + Math.random() * 0.007,
+                        currentOrbitAngle: Math.random() * Math.PI * 2,
+                        bobSpeed: 1.5 + Math.random() * 1.5, bobAmount: 0.08 + Math.random() * 0.15,
+                        visualGroup: birdVisualGroup, 
+                        wings: singleWingMesh, 
+                        flapSpeed: 10 + Math.random() * 5, flapAngle: Math.PI / 2.5 + (Math.random() - 0.5) * (Math.PI / 5)
+                    };
+                    const udBird = bird.userData; const angleBird = udBird.currentOrbitAngle; const radiusBird = udBird.orbitRadius; const axisBird = udBird.orbitAxis;
+                    let initialPosBird = new THREE.Vector3(Math.cos(angleBird) * radiusBird, Math.sin(angleBird) * radiusBird, 0); 
+                    const qBird = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisBird.clone().normalize()); 
+                    initialPosBird.applyQuaternion(qBird);
+                    const initialBobBird = Math.sin(time * udBird.bobSpeed + i * 0.5) * udBird.bobAmount; 
+                    udBird.visualGroup.position.y = initialBobBird; 
+                    bird.position.copy(initialPosBird); 
+
+                    islandGroup.add(bird); wildlifeArray.push(bird);
+                }
+
+                const ballMaterial = new THREE.MeshStandardMaterial({ color: ORBITING_BALL_COLOR, roughness: 0.6, metalness: 0.2 });
+                for (let i = 0; i < NUM_ORBITING_BALLS; i++) {
+                    const ballGeometry = new THREE.SphereGeometry(ORBITING_BALL_VISUAL_RADIUS, 16, 12);
+                    const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
+                    ballMesh.castShadow = true;
+                    
+                    const ballObject = new THREE.Group(); 
+                    ballObject.add(ballMesh); 
+
+                    ballObject.userData = {
+                        orbitRadius: ISLAND_RADIUS + ORBITING_BALL_ORBIT_RADIUS_OFFSET + Math.random() * ORBITING_BALL_ORBIT_RADIUS_VARIATION,
+                        orbitAxis: new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 0.5 - 0.25, Math.random() * 2 - 1).normalize(), 
+                        orbitAngularSpeed: ORBITING_BALL_SPEED_MIN + Math.random() * ORBITING_BALL_SPEED_VARIATION,
+                        currentOrbitAngle: Math.random() * Math.PI * 2,
+                        bobSpeed: ORBITING_BALL_BOB_SPEED + (Math.random() - 0.5) * 0.2, 
+                        bobAmount: ORBITING_BALL_BOB_AMOUNT + (Math.random() - 0.5) * 0.05, 
+                        visualGroup: ballMesh, 
+                    };
+                    const udBall = ballObject.userData; const angleBall = udBall.currentOrbitAngle; const radiusBall = udBall.orbitRadius; const axisBall = udBall.orbitAxis;
+                    let initialPosBall = new THREE.Vector3(Math.cos(angleBall) * radiusBall, Math.sin(angleBall) * radiusBall, 0);
+                    const qBall = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisBall.clone().normalize());
+                    initialPosBall.applyQuaternion(qBall);
+                    const initialBobBall = Math.sin(time * udBall.bobSpeed + (NUM_BIRDS + i) * 0.5) * udBall.bobAmount; 
+                    udBall.visualGroup.position.y = initialBobBall;
+                    ballObject.position.copy(initialPosBall);
+
+                    islandGroup.add(ballObject);
+                    wildlifeArray.push(ballObject); 
+                }
+
+                // --- Special Moon Creation ---
+                const specialMoonGeometry = new THREE.SphereGeometry(SPECIAL_MOON_RADIUS, 20, 16); 
+                const specialMoonMaterial = new THREE.MeshStandardMaterial({ 
+                    color: SPECIAL_MOON_COLOR, 
+                    roughness: SPECIAL_MOON_ROUGHNESS, 
+                    metalness: 0.1 
+                });
+                const specialMoonMesh = new THREE.Mesh(specialMoonGeometry, specialMoonMaterial);
+                specialMoonMesh.castShadow = true;
+
+                const specialMoonObject = new THREE.Group();
+                specialMoonObject.add(specialMoonMesh);
+
+                specialMoonObject.userData = {
+                    // UPDATED orbitRadius calculation
+                    orbitRadius: ISLAND_RADIUS + ORBITING_BALL_ORBIT_RADIUS_OFFSET + 10.5 + Math.random() * 0.5, // Now two times further
+                    orbitAxis: new THREE.Vector3(Math.random() * 0.2 - 0.1, 1, Math.random() * 0.2 - 0.1).normalize(), 
+                    orbitAngularSpeed: ORBITING_BALL_SPEED_MIN * 0.8, 
+                    currentOrbitAngle: Math.random() * Math.PI * 2,
+                    bobSpeed: ORBITING_BALL_BOB_SPEED * 0.7, 
+                    bobAmount: ORBITING_BALL_BOB_AMOUNT * 0.5, 
+                    visualGroup: specialMoonMesh, 
+                };
+                const udSpecialMoon = specialMoonObject.userData;
+                const angleSpecialMoon = udSpecialMoon.currentOrbitAngle;
+                const radiusSpecialMoon = udSpecialMoon.orbitRadius;
+                const axisSpecialMoon = udSpecialMoon.orbitAxis;
+                let initialPosSpecialMoon = new THREE.Vector3(Math.cos(angleSpecialMoon) * radiusSpecialMoon, Math.sin(angleSpecialMoon) * radiusSpecialMoon, 0);
+                const qSpecialMoon = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axisSpecialMoon.clone().normalize());
+                initialPosSpecialMoon.applyQuaternion(qSpecialMoon);
+                const initialBobSpecialMoon = Math.sin(time * udSpecialMoon.bobSpeed + (NUM_BIRDS + NUM_ORBITING_BALLS) * 0.5) * udSpecialMoon.bobAmount;
+                udSpecialMoon.visualGroup.position.y = initialBobSpecialMoon;
+                specialMoonObject.position.copy(initialPosSpecialMoon);
+
+                islandGroup.add(specialMoonObject);
+                wildlifeArray.push(specialMoonObject); 
+
+
+                camera.lookAt(islandGroup.position);
+                setupSettingsUI();
+
+                renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+                renderer.domElement.addEventListener('mousemove', onMouseMove, false); 
+                renderer.domElement.addEventListener('mouseup', onMouseUp, false);   
+                renderer.domElement.addEventListener('mouseleave', onMouseUp, false); 
+                renderer.domElement.addEventListener('wheel', onMouseWheel, false);
+
+
+            } catch (error) {
+                console.error("Error during initialization:", error);
+                document.body.innerHTML = `<pre style='color:white; background:black; padding:20px; font-family:monospace; white-space: pre-wrap;'>Error during initialization. Name: ${error.name}\nMessage: ${error.message}\nStack: ${error.stack}</pre>`;
+            }
+        }
+
+        function resetSimulationState() {
+            islandGroup.rotation.set(0, 0, 0);
+            characterPivot.rotation.set(0, 0, 0); 
+            characterModel.rotation.set(0, 0, 0); 
+
+            document.getElementById('sunIntensity').value = defaultSettings.sunIntensity;
+            document.getElementById('sunMiddayColor').value = defaultSettings.sunMiddayColor;
+            document.getElementById('crystalLightIntensity').value = defaultSettings.crystalLightIntensity;
+            document.getElementById('crystalLightColor').value = defaultSettings.crystalLightColor;
+            document.getElementById('crystalEmissiveColor').value = defaultSettings.crystalEmissiveColor;
+
+            directionalLight.intensity = defaultSettings.sunIntensity;
+            baseSunColor.set(defaultSettings.sunMiddayColor); 
+            directionalLight.color.set(baseSunColor); 
+            
+            crystalLight.intensity = defaultSettings.crystalLightIntensity;
+            crystalLight.color.set(defaultSettings.crystalLightColor);
+            crystalMesh.material.emissive.set(defaultSettings.crystalEmissiveColor);
+
+            time = 0; 
+            camera.position.set(0, 7, 18); 
+        }
+
+        function setupSettingsUI() {
+            document.getElementById('sunIntensity').addEventListener('input', (event) => { /* Handled in animate */ });
+            document.getElementById('sunMiddayColor').addEventListener('input', (event) => {
+                baseSunColor.set(event.target.value); 
+            });
+            document.getElementById('crystalLightIntensity').addEventListener('input', (event) => {
+                crystalLight.intensity = parseFloat(event.target.value);
+            });
+            document.getElementById('crystalLightColor').addEventListener('input', (event) => {
+                crystalLight.color.set(event.target.value);
+            });
+            document.getElementById('crystalEmissiveColor').addEventListener('input', (event) => {
+                crystalMesh.material.emissive.set(event.target.value);
+            });
+            document.getElementById('resetButton').addEventListener('click', resetSimulationState);
+        }
+
+        function onMouseDown(event) {
+            if (document.getElementById('settingsPanel').contains(event.target)) return;
+            
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(islandGroup, true); 
+            if (intersects.length > 0) {
+                isDragging = true;
+                document.body.classList.add('dragging');
+                previousMousePosition = { x: event.clientX, y: event.clientY };
+            }
+        }
+
+        function onMouseMove(event) {
+            if (isDragging) {
+                const deltaMove = {
+                    x: event.clientX - previousMousePosition.x,
+                    y: event.clientY - previousMousePosition.y
+                };
+                islandGroup.rotation.y += deltaMove.x * DRAG_ROTATION_SENSITIVITY;
+                islandGroup.rotation.x += deltaMove.y * DRAG_ROTATION_SENSITIVITY;
+                previousMousePosition = { x: event.clientX, y: event.clientY };
+            }
+        }
+
+        function onMouseUp() {
+            if (isDragging) {
+                isDragging = false;
+                document.body.classList.remove('dragging');
+            }
+        }
+
+        function onMouseWheel(event) {
+            event.preventDefault(); 
+            camera.position.z += event.deltaY * ZOOM_SPEED;
+            camera.position.z = Math.max(MIN_CAMERA_Z, Math.min(MAX_CAMERA_Z, camera.position.z)); 
+        }
+
+
+        function handleCharacterMovement() {
+            if (!characterModel || !characterPivot) return;
+
+            if (keysPressed.ArrowLeft) characterModel.rotation.y += CHARACTER_TURN_SPEED;
+            if (keysPressed.ArrowRight) characterModel.rotation.y -= CHARACTER_TURN_SPEED;
+
+            const localRightAxis = new THREE.Vector3(1, 0, 0); 
+            const pivotRotationAxis = localRightAxis.clone().applyQuaternion(characterModel.quaternion);
+
+            if (keysPressed.ArrowUp) characterPivot.rotateOnAxis(pivotRotationAxis, CHARACTER_MOVE_SPEED);
+            if (keysPressed.ArrowDown) characterPivot.rotateOnAxis(pivotRotationAxis, -CHARACTER_MOVE_SPEED);
+        }
+
+        function animateWildlife() {
+            wildlifeArray.forEach((item, index) => { 
+                const ud = item.userData;
+                ud.currentOrbitAngle += ud.orbitAngularSpeed;
+
+                const angle = ud.currentOrbitAngle; const radius = ud.orbitRadius; const axis = ud.orbitAxis;
+                
+                let currentPos = new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0); 
+                const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis.clone().normalize()); 
+                currentPos.applyQuaternion(q); 
+                item.position.copy(currentPos); 
+
+                if (ud.visualGroup && ud.bobAmount > 0) {
+                    const bobOffset = Math.sin(time * ud.bobSpeed + index * 0.5) * ud.bobAmount; 
+                    ud.visualGroup.position.y = bobOffset;
+                }
+
+                if (ud.wings && ud.flapSpeed && ud.flapAngle) {
+                    const flap = Math.sin(time * ud.flapSpeed + index * 0.7) * ud.flapAngle / 2;
+                    ud.wings.rotation.x = flap;
+                }
+
+                const lookAheadAngle = angle + 0.05; 
+                let lookAheadPos = new THREE.Vector3(Math.cos(lookAheadAngle) * radius, Math.sin(lookAheadAngle) * radius, 0);
+                lookAheadPos.applyQuaternion(q);
+                item.lookAt(lookAheadPos);
+            });
+        }
+
+
+        function animate() {
+            try {
+                requestAnimationFrame(animate);
+                time += 0.01; 
+
+                islandGroup.position.y = baseIslandY + (Math.sin(time * BOBBING_SPEED) * BOBBING_AMOUNT);
+
+                let daylightFactor = 0.5; 
+
+                if (directionalLight) {
+                    directionalLight.position.x = Math.sin(time * LIGHT_ORBIT_SPEED * 2) * 20; 
+                    directionalLight.position.z = Math.cos(time * LIGHT_ORBIT_SPEED * 2) * 20;
+
+                    daylightFactor = (directionalLight.position.z + 20) / 40; 
+                    daylightFactor = Math.max(0, Math.min(1, daylightFactor)); 
+                    daylightFactor = 0.5 * (1 - Math.cos(daylightFactor * Math.PI)); 
+
+                    const baseIntensityFromSlider = parseFloat(document.getElementById('sunIntensity').value);
+                    directionalLight.intensity = baseIntensityFromSlider * (0.3 + 0.7 * daylightFactor); 
+
+                    const currentMiddayColor = new THREE.Color(document.getElementById('sunMiddayColor').value); 
+                    baseSunColor.set(currentMiddayColor); 
+                    directionalLight.color.copy(sunriseSunColor).lerp(baseSunColor, daylightFactor);
+
+                    const darkBgColor = new THREE.Color(0x102040); 
+                    const middayBgColor = new THREE.Color(0x87CEEB); 
+                    
+                    const bgInterpolationFactor = Math.pow(daylightFactor, 0.7); 
+                    scene.background.copy(middayBgColor).lerp(darkBgColor, 1 - bgInterpolationFactor);
+                    scene.background.lerp(directionalLight.color, 0.2 * daylightFactor); 
+
+                    scene.fog.color.copy(scene.background); 
+                }
+
+
+                if (!isDragging) islandGroup.rotation.y += AUTO_ROTATION_SPEED;
+
+                handleCharacterMovement();
+                animateWildlife();
+
+                if (crystalMesh) {
+                    crystalMesh.rotation.y += 0.005;
+                    crystalMesh.rotation.x += 0.002;
+                }
+
+                renderer.render(scene, camera);
+            } catch (error) {
+                console.error("Error during animation:", error);
+            }
+        }
+
+        function onWindowResize() {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio); 
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                init();
+                animate();
+            });
+        } else {
+            init();
+            animate();
+        }
+        window.addEventListener('resize', onWindowResize, false);
+
+        document.addEventListener('keydown', (event) => {
+            if (keysPressed.hasOwnProperty(event.key)) keysPressed[event.key] = true;
+        });
+        document.addEventListener('keyup', (event) => {
+            if (keysPressed.hasOwnProperty(event.key)) keysPressed[event.key] = false;
+        });
+
+    </script>
+</body>
+</html>
